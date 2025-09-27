@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Mini Chatbot</title>
+  <style>
+    body{font-family:Arial;background:#f4f6f8;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}
+    .chat{width:420px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12);display:flex;flex-direction:column;overflow:hidden}
+    .msgs{flex:1;padding:12px;overflow:auto}
+    .msg{max-width:75%;padding:8px 12px;border-radius:12px;margin:6px 0;clear:both;position:relative}
+    .user{background:#d1e7dd;float:right}
+    .bot{background:#f8d7da;float:left}
+    .meta{font-size:11px;color:#555;margin-top:6px}
+    .controls{display:flex;border-top:1px solid #eee;padding:8px}
+    input{flex:1;padding:8px;border-radius:6px;border:1px solid #ddd;outline:none}
+    button{margin-left:8px;padding:8px 12px;border:none;border-radius:6px;background:#007bff;color:white;cursor:pointer}
+    .small{background:#6c757d}
+    .action-btn{font-size:12px;padding:4px 8px;margin-left:6px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="chat">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #eee">
+      <strong>Mini Chatbot</strong>
+      <div>
+        <button class="action-btn small" onclick="clearChat()">Clear Chat</button>
+      </div>
+    </div>
+
+    <div class="msgs" id="msgs"></div>
+
+    <div class="controls">
+      <input id="input" placeholder="Type message..." />
+      <button onclick="send()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/messages');
+      const data = await res.json();
+      const msgs = document.getElementById('msgs');
+      msgs.innerHTML = '';
+      data.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (m.sender === 'user' ? 'user' : 'bot');
+        div.innerHTML = `<div>${m.sender}: ${escapeHtml(m.text)}</div>
+                         <div class="meta">${new Date(m.timestamp).toLocaleString()} 
+                           <button style="float:right" onclick="deleteMsg('${m._id}')" class="action-btn">🗑️</button>
+                           <button style="float:right;margin-right:6px" onclick="editMsgPrompt('${m._id}','${escapeQuotes(m.text)}')" class="action-btn">✏️</button>
+                         </div>`;
+        msgs.appendChild(div);
+      });
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+    function escapeQuotes(str){ return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+
+    async function send(){
+      const inp = document.getElementById('input');
+      const txt = inp.value.trim();
+      if(!txt) return;
+      await fetch('/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text: txt, sender: 'user' })
+      });
+      inp.value = '';
+      load();
+    }
+
+    async function deleteMsg(id){
+      if(!confirm('Delete this message?')) return;
+      await fetch('/messages/' + id, { method: 'DELETE' });
+      load();
+    }
+
+    async function editMsgPrompt(id, oldText){
+      const newText = prompt('Edit message:', oldText);
+      if(newText === null) return; // cancelled
+      if(!newText.trim()) return alert('Message cannot be empty.');
+      await fetch('/messages/' + id, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text: newText})
+      });
+      load();
+    }
+
+    async function clearChat(){
+      if(!confirm('Clear all chat?')) return;
+      await fetch('/messages', { method: 'DELETE' });
+      load();
+    }
+
+    // auto refresh every second
+    setInterval(load, 1000);
+    load();
+  </script>
+</body>
+</html>
